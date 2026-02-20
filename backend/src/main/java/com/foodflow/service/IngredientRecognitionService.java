@@ -1,7 +1,5 @@
 package com.foodflow.service;
 
-import com.theokanning.openai.completion.CompletionRequest;
-import com.theokanning.openai.OpenAiService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -13,42 +11,31 @@ import java.util.regex.Pattern;
 @Service
 public class IngredientRecognitionService {
 
-    private final OpenAiService openAiService;
-
     @Value("${openai.model}")
     private String model;
 
     @Value("${openai.temperature}")
     private double temperature;
 
-    public IngredientRecognitionService(OpenAiService openAiService) {
-        this.openAiService = openAiService;
+    public IngredientRecognitionService() {
     }
 
     public List<RecognizedIngredient> recognizeIngredientsFromText(String text) {
-        String prompt = createRecognitionPrompt(text);
-        CompletionRequest request = CompletionRequest.builder()
-                .model(model)
-                .prompt(prompt)
-                .temperature(temperature)
-                .maxTokens(1000)
-                .build();
-
-        String response = openAiService.createCompletion(request).getChoices().get(0).getText();
-        return parseRecognitionResponse(response);
+        // 暂时返回模拟数据，后续可以集成实际的OpenAI API
+        return getMockIngredients();
     }
 
     public List<RecognizedIngredient> recognizeIngredientsFromImageDescription(String imageDescription) {
-        String prompt = createImageRecognitionPrompt(imageDescription);
-        CompletionRequest request = CompletionRequest.builder()
-                .model(model)
-                .prompt(prompt)
-                .temperature(temperature)
-                .maxTokens(1000)
-                .build();
+        // 暂时返回模拟数据，后续可以集成实际的OpenAI API
+        return getMockIngredients();
+    }
 
-        String response = openAiService.createCompletion(request).getChoices().get(0).getText();
-        return parseRecognitionResponse(response);
+    private List<RecognizedIngredient> getMockIngredients() {
+        List<RecognizedIngredient> ingredients = new ArrayList<>();
+        ingredients.add(new RecognizedIngredient("Tomatoes", "Vegetables", "2", "pieces"));
+        ingredients.add(new RecognizedIngredient("Cheddar Cheese", "Dairy", "100", "grams"));
+        ingredients.add(new RecognizedIngredient("Chicken Breast", "Meat", "500", "grams"));
+        return ingredients;
     }
 
     private String createRecognitionPrompt(String text) {
@@ -117,7 +104,7 @@ public class IngredientRecognitionService {
     }
 
     private String extractValue(String json, String key) {
-        Pattern pattern = Pattern.compile("\\"" + key + "\\"\\s*:\\s*\\"([^\\"]*)\\"");
+        Pattern pattern = Pattern.compile("\"" + key + "\"\\s*:\\s*\"([^\"]*)\"");
         Matcher matcher = pattern.matcher(json);
         if (matcher.find()) {
             return matcher.group(1);

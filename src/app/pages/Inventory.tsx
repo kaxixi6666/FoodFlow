@@ -1,5 +1,5 @@
 import { Search, ChevronDown, Download, Plus, Minus, Trash2, Edit2, X } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
 
 interface InventoryItem {
@@ -13,16 +13,45 @@ interface InventoryItem {
   editing: boolean;
 }
 
-const mockInventory: InventoryItem[] = [];
-
 const categories = ["All Categories", "Vegetables", "Fruits", "Dairy", "Meat", "Seafood", "Grains", "Beverages", "Condiments"];
 
 export function Inventory() {
-  const [inventory, setInventory] = useState<InventoryItem[]>(mockInventory);
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All Categories");
   const [sortBy, setSortBy] = useState("name");
   const [bulkAmount, setBulkAmount] = useState("1");
+
+  // Fetch inventory data from backend API
+  useEffect(() => {
+    const fetchInventory = async () => {
+      try {
+        const response = await fetch('/api/inventory');
+        const data = await response.json();
+        
+        // Transform data to match InventoryItem interface
+        const inventoryItems: InventoryItem[] = data.map((item: any) => ({
+          id: item.id,
+          name: item.name,
+          category: item.category,
+          quantity: item.quantity,
+          unit: item.unit,
+          lastUpdated: item.lastUpdated,
+          selected: false,
+          editing: false
+        }));
+        
+        setInventory(inventoryItems);
+      } catch (error) {
+        console.error('Error fetching inventory:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchInventory();
+  }, []);
 
   const selectedCount = inventory.filter(item => item.selected).length;
   const allSelected = inventory.length > 0 && selectedCount === inventory.length;
@@ -153,104 +182,113 @@ export function Inventory() {
 
       {/* Main Data Table */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        <Table className="w-full">
-          <TableHeader className="bg-gray-50">
-            <TableRow>
-              <TableHead className="px-4">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={toggleSelectAll}
-                  className="w-4 h-4 rounded border-gray-300 text-[#4CAF50] focus:ring-[#4CAF50] cursor-pointer"
-                />
-              </TableHead>
-              <TableHead className="px-4 text-left text-sm font-medium text-gray-700">Ingredient Name</TableHead>
-              <TableHead className="px-4 text-left text-sm font-medium text-gray-700">Category</TableHead>
-              <TableHead className="px-4 text-left text-sm font-medium text-gray-700">Current Quantity</TableHead>
-              <TableHead className="px-4 text-center text-sm font-medium text-gray-700">Adjust</TableHead>
-              <TableHead className="px-4 text-left text-sm font-medium text-gray-700">Last Updated</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody className="divide-y divide-gray-200">
-            {filteredInventory.map((item) => (
-              <TableRow key={item.id} className={item.selected ? "bg-green-50" : ""}>
-                <TableCell className="px-4">
-                  <input
-                    type="checkbox"
-                    checked={item.selected}
-                    onChange={() => toggleSelect(item.id)}
-                    className="w-4 h-4 rounded border-gray-300 text-[#4CAF50] focus:ring-[#4CAF50] cursor-pointer"
-                  />
-                </TableCell>
-                <TableCell className="px-4 font-medium text-gray-900">{item.name}</TableCell>
-                <TableCell className="px-4">
-                  <span className="inline-flex px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-                    {item.category}
-                  </span>
-                </TableCell>
-                <TableCell className="px-4">
-                  {item.editing ? (
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        defaultValue={item.quantity}
-                        onBlur={(e) => {
-                          updateQuantity(item.id, parseFloat(e.target.value) || 0);
-                          toggleEdit(item.id);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            updateQuantity(item.id, parseFloat(e.currentTarget.value) || 0);
-                            toggleEdit(item.id);
-                          }
-                        }}
-                        className="w-24 px-2 py-1 border border-[#4CAF50] rounded focus:outline-none focus:ring-2 focus:ring-[#4CAF50]"
-                        autoFocus
-                      />
-                      <span className="text-gray-600 text-sm">{item.unit}</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <span className="text-gray-900 font-medium">{item.quantity}</span>
-                      <span className="text-gray-600 text-sm">{item.unit}</span>
-                      <button
-                        onClick={() => toggleEdit(item.id)}
-                        className="p-1 text-gray-500 hover:text-gray-700 transition-colors"
-                        title="Edit quantity"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  )}
-                </TableCell>
-                <TableCell className="px-4">
-                  <div className="flex items-center justify-center gap-2">
-                    <button
-                      onClick={() => decreaseQuantity(item.id)}
-                      className="p-1.5 text-gray-600 hover:bg-gray-100 rounded transition-colors"
-                      title="Decrease"
-                    >
-                      <Minus className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => increaseQuantity(item.id)}
-                      className="p-1.5 text-[#4CAF50] hover:bg-green-50 rounded transition-colors"
-                      title="Increase"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
-                  </div>
-                </TableCell>
-                <TableCell className="px-4 text-gray-500 text-sm">{item.lastUpdated}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-
-        {filteredInventory.length === 0 && (
-          <div className="py-12 text-center text-gray-500">
-            No items found matching your search criteria.
+        {loading ? (
+          <div className="py-20 text-center">
+            <div className="w-10 h-10 border-4 border-[#4CAF50] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-gray-600">Loading inventory data...</p>
           </div>
+        ) : (
+          <>
+            <Table className="w-full">
+              <TableHeader className="bg-gray-50">
+                <TableRow>
+                  <TableHead className="px-4">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={toggleSelectAll}
+                      className="w-4 h-4 rounded border-gray-300 text-[#4CAF50] focus:ring-[#4CAF50] cursor-pointer"
+                    />
+                  </TableHead>
+                  <TableHead className="px-4 text-left text-sm font-medium text-gray-700">Ingredient Name</TableHead>
+                  <TableHead className="px-4 text-left text-sm font-medium text-gray-700">Category</TableHead>
+                  <TableHead className="px-4 text-left text-sm font-medium text-gray-700">Current Quantity</TableHead>
+                  <TableHead className="px-4 text-center text-sm font-medium text-gray-700">Adjust</TableHead>
+                  <TableHead className="px-4 text-left text-sm font-medium text-gray-700">Last Updated</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody className="divide-y divide-gray-200">
+                {filteredInventory.map((item) => (
+                  <TableRow key={item.id} className={item.selected ? "bg-green-50" : ""}>
+                    <TableCell className="px-4">
+                      <input
+                        type="checkbox"
+                        checked={item.selected}
+                        onChange={() => toggleSelect(item.id)}
+                        className="w-4 h-4 rounded border-gray-300 text-[#4CAF50] focus:ring-[#4CAF50] cursor-pointer"
+                      />
+                    </TableCell>
+                    <TableCell className="px-4 font-medium text-gray-900">{item.name}</TableCell>
+                    <TableCell className="px-4">
+                      <span className="inline-flex px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                        {item.category}
+                      </span>
+                    </TableCell>
+                    <TableCell className="px-4">
+                      {item.editing ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            defaultValue={item.quantity}
+                            onBlur={(e) => {
+                              updateQuantity(item.id, parseFloat(e.target.value) || 0);
+                              toggleEdit(item.id);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                updateQuantity(item.id, parseFloat(e.currentTarget.value) || 0);
+                                toggleEdit(item.id);
+                              }
+                            }}
+                            className="w-24 px-2 py-1 border border-[#4CAF50] rounded focus:outline-none focus:ring-2 focus:ring-[#4CAF50]"
+                            autoFocus
+                          />
+                          <span className="text-gray-600 text-sm">{item.unit}</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-900 font-medium">{item.quantity}</span>
+                          <span className="text-gray-600 text-sm">{item.unit}</span>
+                          <button
+                            onClick={() => toggleEdit(item.id)}
+                            className="p-1 text-gray-500 hover:text-gray-700 transition-colors"
+                            title="Edit quantity"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell className="px-4">
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => decreaseQuantity(item.id)}
+                          className="p-1.5 text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                          title="Decrease"
+                        >
+                          <Minus className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => increaseQuantity(item.id)}
+                          className="p-1.5 text-[#4CAF50] hover:bg-green-50 rounded transition-colors"
+                          title="Increase"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </TableCell>
+                    <TableCell className="px-4 text-gray-500 text-sm">{item.lastUpdated}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+
+            {filteredInventory.length === 0 && (
+              <div className="py-12 text-center text-gray-500">
+                No items found matching your search criteria.
+              </div>
+            )}
+          </>
         )}
       </div>
 

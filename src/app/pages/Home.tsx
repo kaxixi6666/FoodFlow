@@ -1,5 +1,6 @@
-import { Upload, Camera, Scan, Search, Check, X, Edit2, Plus } from "lucide-react";
-import { useState } from "react";
+import React, { useState, useRef } from "react";
+import { Upload, Camera, Scan, Search, Check, X, Edit2, Plus, FileText, Image } from "lucide-react";
+import { toast } from "sonner";
 
 interface DetectedIngredient {
   id: number;
@@ -32,6 +33,12 @@ export function Home() {
   const [manualIngredients, setManualIngredients] = useState<ManualIngredient[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [dragActive, setDragActive] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState("");
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileUploadInputRef = useRef<HTMLInputElement>(null);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -47,7 +54,177 @@ export function Home() {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    // Handle file upload logic here
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleFiles(e.dataTransfer.files);
+    }
+  };
+
+  const handleFiles = (files: FileList) => {
+    const validFiles = Array.from(files).filter(file => {
+      const validTypes = ['image/jpeg', 'image/png', 'application/pdf'];
+      return validTypes.includes(file.type) && file.size <= 10 * 1024 * 1024; // 10MB limit
+    });
+    
+    if (validFiles.length > 0) {
+      setSelectedFiles(prev => [...prev, ...validFiles]);
+      setUploadMessage(`Added ${validFiles.length} file(s)`);
+    }
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      handleFiles(e.target.files);
+    }
+  };
+
+  const handleFileUploadChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      handleFiles(e.target.files);
+    }
+  };
+
+  const handleScanClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleBrowseClick = () => {
+    fileUploadInputRef.current?.click();
+  };
+
+  const removeFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSubmitFiles = async () => {
+    if (selectedFiles.length === 0) return;
+    
+    setUploading(true);
+    setUploadMessage("Analyzing files...");
+    
+    try {
+      // Simulate API call to analyze files with LLM
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Generate mock detected ingredients based on file types
+      const mockIngredients: DetectedIngredient[] = [
+        {
+          id: 1,
+          name: "Tomatoes",
+          quantity: "2",
+          status: "matched",
+          editing: false
+        },
+        {
+          id: 2,
+          name: "Cheddar Cheese",
+          quantity: "100g",
+          status: "matched",
+          editing: false
+        },
+        {
+          id: 3,
+          name: "Chicken Breast",
+          quantity: "500g",
+          status: "new",
+          editing: false
+        },
+        {
+          id: 4,
+          name: "Olive Oil",
+          quantity: "500ml",
+          status: "uncertain",
+          editing: false
+        }
+      ];
+      
+      setDetectedIngredients(mockIngredients);
+      setUploadMessage(`Successfully detected ${mockIngredients.length} ingredients`);
+      
+    } catch (error) {
+      console.error('Error analyzing files:', error);
+      setUploadMessage('Error analyzing files. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleConfirmAdd = async () => {
+    const ingredientsToAdd = [...detectedIngredients, ...manualIngredients];
+    if (ingredientsToAdd.length === 0) return;
+    
+    setUploading(true);
+    setUploadMessage("Adding to inventory...");
+    
+    try {
+      // Call backend API to add ingredients to inventory
+      const addPromises = ingredientsToAdd.map(ingredient => {
+        // Determine quantity and unit
+        let quantity = 0;
+        let unit = "pcs";
+        
+        if ('quantity' in ingredient) {
+          // For detected ingredients
+          const quantityStr = ingredient.quantity.toString();
+          const match = quantityStr.match(/^([\d.]+)\s*(.*)$/);
+          if (match) {
+            quantity = parseFloat(match[1]) || 0;
+            unit = match[2] || "pcs";
+          } else {
+            quantity = parseFloat(quantityStr) || 0;
+          }
+        } else if ('quantity' in ingredient && typeof ingredient.quantity === 'string') {
+          // For manual ingredients
+          const quantityStr = ingredient.quantity;
+          const match = quantityStr.match(/^([\d.]+)\s*(.*)$/);
+          if (match) {
+            quantity = parseFloat(match[1]) || 0;
+            unit = match[2] || "pcs";
+          } else {
+            quantity = parseFloat(quantityStr) || 0;
+          }
+        }
+        
+        const inventoryRequest = {
+          name: ingredient.name,
+          category: ingredient.category || "Uncategorized",
+          quantity: quantity,
+          unit: unit
+        };
+        
+        return fetch('/api/inventory', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(inventoryRequest),
+        }).then(response => response.json());
+      });
+      
+      await Promise.all(addPromises);
+      
+      // Clear form after successful addition
+            setDetectedIngredients([]);
+            setManualIngredients([]);
+            setSelectedFiles([]);
+            setUploadMessage(`Successfully added ${ingredientsToAdd.length} items to inventory`);
+            
+            // Show success toast notification
+            toast.success(`Successfully added ${ingredientsToAdd.length} items to inventory`);
+      
+    } catch (error) {
+      console.error('Error adding to inventory:', error);
+      setUploadMessage('Error adding to inventory. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleCancelAdd = () => {
+    // Clear form without adding to database
+    setDetectedIngredients([]);
+    setManualIngredients([]);
+    setSelectedFiles([]);
+    setUploadMessage("");
   };
 
   const toggleEdit = (id: number) => {
@@ -89,17 +266,43 @@ export function Home() {
 
   return (
     <div className="grid grid-cols-5 gap-6">
+      {/* Hidden File Inputs */}
+      {/* Camera Input for Scanning */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileInputChange}
+        accept="image/*"
+        capture
+        className="hidden"
+      />
+      {/* File Input for Uploads */}
+      <input
+        type="file"
+        ref={fileUploadInputRef}
+        onChange={handleFileUploadChange}
+        multiple
+        accept="image/jpeg,image/png,application/pdf"
+        className="hidden"
+      />
+      
       {/* Left Column - Primary Action Area */}
       <div className="col-span-2 space-y-6">
         {/* Scan Actions */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <h3 className="text-lg text-gray-900 mb-4">Quick Actions</h3>
           <div className="space-y-3">
-            <button className="w-full px-6 py-4 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors flex items-center justify-center gap-3">
+            <button 
+              onClick={handleScanClick}
+              className="w-full px-6 py-4 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors flex items-center justify-center gap-3"
+            >
               <Scan className="w-5 h-5" />
               <span>Scan Receipt</span>
             </button>
-            <button className="w-full px-6 py-4 bg-white text-gray-700 rounded-lg border-2 border-gray-200 hover:border-primary hover:bg-orange-50 transition-colors flex items-center justify-center gap-3">
+            <button 
+              onClick={handleScanClick}
+              className="w-full px-6 py-4 bg-white text-gray-700 rounded-lg border-2 border-gray-200 hover:border-primary hover:bg-orange-50 transition-colors flex items-center justify-center gap-3"
+            >
               <Camera className="w-5 h-5" />
               <span>Scan Fridge</span>
             </button>
@@ -126,7 +329,10 @@ export function Home() {
             <p className="text-sm text-gray-500 mb-4">
               or click to browse your device
             </p>
-            <button className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm">
+            <button 
+              onClick={handleBrowseClick}
+              className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
+            >
               Browse Files
             </button>
             <p className="text-xs text-gray-400 mt-4">
@@ -134,6 +340,62 @@ export function Home() {
             </p>
           </div>
         </div>
+
+        {/* Selected Files - Folder Style */}
+        {selectedFiles.length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <h3 className="text-lg text-gray-900 mb-4">Selected Files ({selectedFiles.length})</h3>
+            <div className="bg-gray-50 rounded-lg border border-gray-200">
+              {selectedFiles.map((file, index) => (
+                <div key={index} className="flex items-center gap-3 p-4 border-b border-gray-200 last:border-b-0">
+                  <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center">
+                    {file.type.includes('pdf') ? (
+                      <FileText className="w-4 h-4 text-gray-500" />
+                    ) : (
+                      <Image className="w-4 h-4 text-gray-500" />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-900 truncate">
+                      {file.name}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {(file.size / 1024 / 1024).toFixed(2)} MB
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => removeFile(index)}
+                    className="p-1.5 text-red-600 hover:bg-red-50 rounded"
+                    title="Remove file"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            
+            {/* Submit Button */}
+            <div className="mt-4">
+              <button
+                onClick={handleSubmitFiles}
+                disabled={uploading}
+                className="w-full px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {uploading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Analyzing...</span>
+                  </>
+                ) : (
+                  <>
+                    <Search className="w-4 h-4" />
+                    <span>Analyze Files</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Upload Tips */}
         <div className="bg-blue-50 rounded-xl border border-blue-100 p-5">
@@ -317,10 +579,14 @@ export function Home() {
 
         {/* Confirm Button */}
         <div className="flex items-center justify-end gap-3">
-          <button className="px-6 py-3 bg-white text-gray-700 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+          <button 
+            onClick={handleCancelAdd}
+            className="px-6 py-3 bg-white text-gray-700 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+          >
             Cancel
           </button>
           <button
+            onClick={handleConfirmAdd}
             className="px-8 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors flex items-center gap-2"
             disabled={detectedIngredients.length === 0 && manualIngredients.length === 0}
           >

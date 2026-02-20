@@ -3,6 +3,7 @@ import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
 import { useNavigate } from "react-router";
+import { useAuth } from "../components/AuthProvider";
 
 export function Login() {
   const [email, setEmail] = useState("");
@@ -11,6 +12,7 @@ export function Login() {
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,7 +39,7 @@ export function Login() {
       localStorage.setItem("users", JSON.stringify(users));
       
       // Auto login after registration
-      localStorage.setItem("user", JSON.stringify(newUser));
+      login(newUser);
       navigate("/");
     } else {
       // Login logic
@@ -45,7 +47,7 @@ export function Login() {
       const user = users.find((user: any) => user.email === email && user.password === password);
       
       if (user) {
-        localStorage.setItem("user", JSON.stringify(user));
+        login(user);
         navigate("/");
       } else {
         setError("Invalid email or password");
