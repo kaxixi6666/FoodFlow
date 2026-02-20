@@ -31,4 +31,6 @@ export const router = createBrowserRouter([
       { path: "planning", Component: Planning },
     ],
   },
-]);
+], {
+  basename: "/FoodFlow"
+});
